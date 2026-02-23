@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Operation Winter Storm — HardHat Security</title>
+<title>HardHat Security Academy</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@400;500&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -49,13 +49,15 @@
   }
   .brand {
     font-family: 'Orbitron', sans-serif;
-    font-size: clamp(28px, 6vw, 46px);
-    font-weight: 900; letter-spacing: 0px; line-height: 1.1;
-    padding-left: 3px;
-    margin-bottom: 6px;
+    font-size: clamp(28px, 6vw, 42px);
+    font-weight: 900;
+    line-height: 1.1;
+    margin-bottom: 4px;
+    letter-spacing: 0;
     opacity: 0; animation: fadeUp .6s ease .2s forwards;
   }
-  .brand span { color: var(--accent); }
+  .brand .line1 { color: var(--bright); display: block; }
+  .brand .line2 { color: var(--accent); display: block; }
   .brand-sub {
     font-size: 13px; color: var(--dim); letter-spacing: 2px;
     margin-bottom: 40px;
@@ -76,8 +78,6 @@
     font-size: 13px; color: var(--dim); line-height: 1.7;
     margin-bottom: 28px;
   }
-
-  /* LinkedIn button */
   .btn-linkedin {
     width: 100%;
     padding: 15px 20px;
@@ -98,23 +98,12 @@
   }
   .btn-linkedin:hover { background: #004182; }
   .btn-linkedin svg { flex-shrink: 0; }
-
-  .divider {
-    display: flex; align-items: center; gap: 12px;
-    margin: 20px 0; color: var(--border);
-    font-size: 11px; letter-spacing: 2px;
-  }
-  .divider::before, .divider::after {
-    content: ''; flex: 1; height: 1px; background: var(--border);
-  }
-
   .why {
     font-size: 12px; color: var(--dim); line-height: 1.8;
     text-align: left; margin-top: 20px;
     border-top: 1px solid var(--border); padding-top: 16px;
   }
   .why span { color: var(--text); }
-
   .error-box {
     margin-bottom: 20px;
     padding: 12px 16px;
@@ -126,27 +115,28 @@
     display: none;
   }
   .error-box.show { display: block; }
-
   .footer {
     margin-top: 32px; font-size: 12px; color: var(--dim); line-height: 1.8;
     opacity: 0; animation: fadeUp .6s ease .5s forwards;
   }
   .footer a { color: var(--accent); text-decoration: none; }
-
   @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="eyebrow">Adversary Emulation Platform</div>
-  <div class="brand">HARDHAT<br><span>SECURITY</span></div>
+  <div class="brand">
+    <span class="line1">HARDHAT</span>
+    <span class="line2">SECURITY</span>
+  </div>
   <div class="brand-sub">hardhatsecurity.com</div>
 
   <div class="card">
-    <div class="card-title">Operation Winter Storm</div>
+    <div class="card-title">HardHat Security Academy</div>
     <div class="card-desc">
-      Simulate the December 2025 cyberattack on Poland's energy sector.<br>
-      9 phases · MITRE ATT&amp;CK mapped · Shareable achievement badge
+      Real-world cyberattacks. MITRE ATT&amp;CK mapped.<br>
+      Sign in to access the simulation library.
     </div>
 
     <div id="error-box" class="error-box"></div>
@@ -170,9 +160,8 @@
 </div>
 
 <script>
-  // Show error message if redirected back with ?error=
   const params = new URLSearchParams(window.location.search);
-  const err    = params.get('error');
+  const err = params.get('error');
   if (err) {
     const box = document.getElementById('error-box');
     box.textContent = '✗  ' + err;
